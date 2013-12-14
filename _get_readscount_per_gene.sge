@@ -1,0 +1,22 @@
+#######################################
+# SGE script to calculate reads count in $1 input per interval in $2
+# Author: Xianjun Dong
+# Date: 2013-12-14
+# Version: 0.0
+#######################################
+
+#!/bin/sh
+#$ -V
+#$ -cwd
+#$ -pe single 4
+#$ -o $HOME/sge_jobs_output/sge_job.$JOB_ID.out -j y
+#$ -S /bin/bash
+#$ -l mem_free=5G
+
+inputbam=$1  # bam format
+intervals=$2  # bed format
+
+coverageBed -abam -counts -a $inputbam -b $intervals > $inputbam.RCinPromoter
+
+
+
