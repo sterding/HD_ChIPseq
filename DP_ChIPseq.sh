@@ -71,8 +71,11 @@ colData(dds)$condition <- factor(colData(dds)$condition, levels=c("control","cas
 colData(dds)$condition <- relevel(colData(dds)$condition, "control")
 
 dds <- DESeq(dds)
-res <- results(dds)
+res <- results(dds)  # filter?
 res <- res[order(res$padj),]
+res[is.na(res$pvalue),'pvalue']=1
+res[is.na(res$padj),'padj']=1
+res[is.na(res$log2FoldChange),'log2FoldChange']=0
 #head(res)
 
 write.table(as.data.frame(res), file="../result/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.xls", quote =F, sep="\t", col.names = NA, row.names = TRUE)
@@ -95,6 +98,7 @@ res2 <- read.table('~/projects/HD/result/Dec16/h3k4me3.in.promoter_1k_round_TSS.
 names(res2)=c('Tx_ID', 'Gene_ID', 'Gene_Type', 'Gene_Symbol', "baseMean", "log2FoldChange", "lfcSE", "stat", "pvalue", "padj")
 res2[is.na(res2$pvalue),'pvalue']=1
 res2[is.na(res2$padj),'padj']=1
+res2[is.na(res2$log2FoldChange),'log2FoldChange']=0
 res2=subset(res2, baseMean>0)
 rownames(res2)=res2$Gene_ID; res2=res2[,-2]
 
@@ -126,19 +130,19 @@ barplot(d, main="Distribution by H3K4me3 and RNAseq signal", cex.name=.7, xlab="
 dev.off()
 
 # DE gene vs. DP h3k4me3
-pdf("../result/2014Jan16/DE.vs.DP.pdf", width=7, height=5)
+pdf("../result/2014Jan16/DE.vs.DP.v2.pdf", width=7, height=5)
 
-plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, ifelse(res2$padj<.0001, 21,20))), cex=.5, lwd=.5, col=ifelse(res2$padj>=.0001, "#00000020", '#ff0000'), bg='#00000020')
+plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, ifelse(res2$padj<.01 & abs(res2$log2FoldChange)>1, 21,20))), cex=.5, lwd=.5, col=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "#00000020", '#ff0000'), bg='#00000020')
 abline(h = 0, lwd = 4, col = '#ff000080')
-legend('topleft', "genes with differential H3K4me3 signal (FDR<0.0001)", col='red', bg="#00000020", pch=21, bty='n', cex=.7)
+legend('topleft', "genes with differential H3K4me3 signal (FDR<0.01 and FC>2)", col='red', bg="#00000020", pch=21, bty='n', cex=.7)
 
-plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, ifelse(res2$padj<.0001, 21,20))), cex=.5, lwd=.5, col=ifelse(res2$padj>=.0001, "#00000020", '#ff0000'), bg=ifelse(res2$padj>=.0001, "gray", ifelse(res2$mean_H>res2$mean_C, 'green', 'blue')))
+plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, ifelse(res2$padj<.01 & abs(res2$log2FoldChange)>1, 21,20))), cex=.5, lwd=.5, col=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "#00000020", '#ff0000'), bg=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "gray", ifelse(res2$mean_H>res2$mean_C, 'green', 'blue')))
 abline(h = 0, lwd = 4, col = '#ff000080')
-legend('topleft', c("genes with differential H3K4me3 signal (FDR<0.0001)", "RNAseq: HD >= Ct", "RNAseq: HD < Ct"), col=rep('red', 3), pt.bg=c("#00000020", 'green', 'blue'), pch=rep(21, 3), bty='n', cex=.7)
+legend('topleft', c("genes with differential H3K4me3 signal (FDR<0.01 and FC>2)", "RNAseq: HD >= Ct", "RNAseq: HD < Ct"), col=rep('red', 3), pt.bg=c("#00000020", 'green', 'blue'), pch=rep(21, 3), bty='n', cex=.7)
 
-plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, 21)), cex=.5, lwd=.5, col=ifelse(res2$padj>=.001, "#00000020", '#ff0000'), bg=ifelse(res2$mean_H>res2$mean_C, '#00ff0080', '#0000ff80'))
+plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, 21)), cex=.5, lwd=.5, col=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "#00000020", '#ff0000'), bg=ifelse(res2$mean_H>res2$mean_C, '#00ff0080', '#0000ff80'))
 abline(h = 0, lwd = 4, col = '#ff000080')
-legend('topleft', c("genes with differential H3K4me3 signal (FDR<0.0001)", "RNAseq: HD >= Ct", "RNAseq: HD < Ct"), col=c('red', "#00000020", "#00000020"), pt.bg=c("#00000020", '#00ff0080', '#0000ff80'), pch=rep(21, 3), bty='n', cex=.7)
+legend('topleft', c("genes with differential H3K4me3 signal (FDR<0.01 and FC>2)", "RNAseq: HD >= Ct", "RNAseq: HD < Ct"), col=c('red', "#00000020", "#00000020"), pt.bg=c("#00000020", '#00ff0080', '#0000ff80'), pch=rep(21, 3), bty='n', cex=.7)
 
 dev.off()
 
