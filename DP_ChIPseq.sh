@@ -5,6 +5,10 @@
 # Version: 0.0
 #######################################
 
+## TODO
+# CHANGE: take the tx with significant changed h3k4me3 and with the highest promoter signal as representative (done in bash)
+
+
 #!/bin/sh
 
 # required files
@@ -60,48 +64,98 @@ plot(hclust(dd)) # to see a dendrogram of clustered variables
 countData=countData[,grep("h3k4me3|R7|3706R|7244|R30|1644", names(countData))] # only take the 6 batch1 and 5 cases of Male and g43yr
 #colData <- data.frame(condition=c(rep("case", sum(grepl("combined|h3k4me3", names(countData)))), rep("control", sum(grepl("Schraham_", names(countData))))))
 #rownames(colData)=names(countData)
+
 # incl covairance
 colData=read.table("../data/covariances.tab", header=T)
 rownames(colData)=colData[,1]
 colData=colData[,-1]
+## splitting continuous variables into factors 
+colData$ageFctr <- cut(colData$age, 3)
+colData$PMIFctr <- cut(colData$PMI, 5)
 
 library(DESeq2)
-dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~ condition) # + age + gender + PMI)
+# w/o covarainces
+dds <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~ condition) 
 colData(dds)$condition <- factor(colData(dds)$condition, levels=c("control","case"))
 colData(dds)$condition <- relevel(colData(dds)$condition, "control")
-
 dds <- DESeq(dds)
-res <- results(dds)  # filter?
+
+# w/ covarainces
+dds2 <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~ ageFctr + PMIFctr + condition)  # remove gender from the formula since only 1 female in the 11 samples
+colData(dds2)$condition <- factor(colData(dds2)$condition, levels=c("control","case"))
+colData(dds2)$condition <- relevel(colData(dds2)$condition, "control")
+dds2 <- DESeq(dds2)
+
+dds3 <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~ ageFctr + condition)  # remove gender from the formula since only 1 female in the 11 samples
+colData(dds3)$condition <- factor(colData(dds3)$condition, levels=c("control","case"))
+colData(dds3)$condition <- relevel(colData(dds3)$condition, "control")
+dds3 <- DESeq(dds3)
+
+dds4 <- DESeqDataSetFromMatrix(countData = countData, colData = colData, design = ~ PMIFctr + condition)  # remove gender from the formula since only 1 female in the 11 samples
+colData(dds4)$condition <- factor(colData(dds4)$condition, levels=c("control","case"))
+colData(dds4)$condition <- relevel(colData(dds4)$condition, "control")
+dds4 <- DESeq(dds4)
+
+res <- as.data.frame(results(dds))  # filter?
+# add H_mean and C_mean there
+ndds=counts(dds, normalized=TRUE)
+mean_H_h3=as.vector(rowMeans(ndds[,grep("_HD", colnames(ndds))]))
+mean_C_h3=as.vector(rowMeans(ndds[,grep("Schraham", colnames(ndds))]))
+res=cbind(res,mean_H_h3,mean_C_h3)
+
 res <- res[order(res$padj),]
 res[is.na(res$pvalue),'pvalue']=1
 res[is.na(res$padj),'padj']=1
 res[is.na(res$log2FoldChange),'log2FoldChange']=0
-#head(res)
 
-write.table(as.data.frame(res), file="../result/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.xls", quote =F, sep="\t", col.names = NA, row.names = TRUE)
+write.table(as.data.frame(res), file="../result/2014Feb6/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.xls", quote =F, sep="\t", col.names = NA, row.names = TRUE)
 
 # plot
-png("../results/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.png", width=800, height=800)
-plotMA(dds,ylim=c(-2,2),main="DESeq2", pvalCutoff=.0001, pointcol = c("#00000020","#ff0000"))
-legend('topleft', "genes with adjusted p<0.0001", col='red', pch=20, bty='n')
+pdf("../result/2014Feb6/DEseq2.plotMA.covariances.pdf", width=7, height=5)
+plotMA(dds, ylim=c(-2,2), pvalCutoff=.01, pointcol = c("#00000020","#ff0000"), main="DEseq2 \n(normalizedCount ~ condition)")
+legend('topleft', "genes with adjusted p<0.01", col='red', pch=20, bty='n')
+plotMA(dds3, ylim=c(-2,2), pvalCutoff=.01, pointcol = c("#00000020","#ff0000"), main="DEseq2 \n(normalizedCount ~ age + condition)")
+legend('topleft', "genes with adjusted p<0.01", col='red', pch=20, bty='n')
+plotMA(dds4, ylim=c(-2,2), pvalCutoff=.01, pointcol = c("#00000020","#ff0000"), main="DEseq2 \n(normalizedCount ~ PMI + condition)")
+legend('topleft', "genes with adjusted p<0.01", col='red', pch=20, bty='n')
+plotMA(dds2, ylim=c(-2,2), pvalCutoff=.01, pointcol = c("#00000020","#ff0000"), main="DEseq2 \n(normalizedCount ~ age + PMI + condition)")
+legend('topleft', "genes with adjusted p<0.01", col='red', pch=20, bty='n')
+dev.off()
+
 #res[is.na(res$pvalue),c('pvalue','padj')]=1
 #res=subset(res, baseMean>0)
 #plot(res$baseMean, pmax(-2, pmin(2, res$log2FoldChange)), log = 'x', pch = ifelse(res$log2FoldChange < -2, 6, ifelse(res$log2FoldChange > 2, 2, 20)), cex=.5, col=ifelse(res$padj<.0001, '#ff0000', '#00000020'))
 #abline(h = 0, lwd = 4, col = '#ff000080')
 
 ## color with gene expression fold change!!!
-# take the tx with the highest promoter signal as representative (done in bash)
-# grep -p "^ENST" result/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.xls | sed 's/___/ /g' | sort -k2,2 -k5,5nr | awk '!arr[$2]++' > result/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.TX.xls
+## take the tx with the highest promoter signal as representative (done in bash)
+## grep -p "^ENST" ../result/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.xls | sed 's/___/ /g' | sort -k2,2 -k5,5nr | awk '!arr[$2]++' > ../result/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.TX.xls
+# CHANGE: take the TXs with significant changed h3k4me3 and then pick the one with the highest promoter signal as representative (done in bash)
+grep -p "^ENST" ../result/2014Feb6/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.xls | awk '{OFS="\t"; print $0, ($7<0.01)?"yes":"no"}' | sed 's/___/  /g' | sort -k2,2 -k11,11r -k5,5nr | awk '!arr[$2]++' | cut -f1-12> ../result/2014Feb6/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.TX.xls
 # merge with gene expression file (from RNAseq)
 # 
-res2 <- read.table('~/projects/HD/result/Dec16/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.TX.xls', header=F)
-names(res2)=c('Tx_ID', 'Gene_ID', 'Gene_Type', 'Gene_Symbol', "baseMean", "log2FoldChange", "lfcSE", "stat", "pvalue", "padj")
-res2[is.na(res2$pvalue),'pvalue']=1
-res2[is.na(res2$padj),'padj']=1
-res2[is.na(res2$log2FoldChange),'log2FoldChange']=0
+res2 <- read.table('~/projects/HD/result/2014Feb6/h3k4me3.in.promoter_1k_round_TSS.allsamples.DESeq2.TX.xls', header=F)  # 57130 rows
+names(res2)=c('Tx_ID', 'Gene_ID', 'Gene_Type', 'Gene_Symbol', "baseMean", "log2FoldChange", "lfcSE", "stat", "pvalue", "padj","mean_H_h3","mean_C_h3")
 res2=subset(res2, baseMean>0)
 rownames(res2)=res2$Gene_ID; res2=res2[,-2]
 
+###################
+# version for 2014-Mar-6
+# using Adam's latest version of DESeq result with p-value
+###################
+# read differential expression data from Adam
+df=read.table("../data/HD_DE_2014_03_04/mlhd_DESeq2_diffexp_DESeq2_outlier_trimmed_adjust.txt")  # only 27924 genes (?)
+colnames(df)=paste("RNAseq", colnames(df), sep="_")
+cn=intersect(rownames(df), rownames(res2)) 
+res2=cbind(res2[cn,], df[cn,])
+
+
+
+
+
+###################
+# version for 2014-Feb-6
+###################
 # read expression data
 df=read.table("../data/allgenes.H3k4me3.expression.v2")
 rownames(df)=df[,1]; df=df[,-c(1,8)]; #,8,17:19,)];
@@ -110,10 +164,10 @@ df=subset(df, chr!="chrM", select=grep("_HD", colnames(df), invert=T))
 ## TODO: ask Adam to provide statistics for the DEseq analysis, incl. p-value etc.
 
 cn=intersect(rownames(df), rownames(res2))
-res2=cbind(res2[cn,], mean_C=rowMeans(df[cn,grep("C_", colnames(df))]), mean_H=rowMeans(df[cn,grep("H_", colnames(df))]))
-res2=cbind(res2, log2FC_expression=log2(.1+res2$mean_H)-log2(res2$mean_C+.1))
-res2=cbind(res2, C=ifelse(log2(res2$mean_C+.1)>5, 1, -1), H=ifelse(log2(.1+res2$mean_H)>5, 1, -1))
-res2=cbind(res2, HCmean=log2((res2$mean_C+res2$mean_H)/2))
+res2=cbind(res2[cn,], mean_C_RNAseq=rowMeans(df[cn,grep("C_", colnames(df))]), mean_H_RNAseq=rowMeans(df[cn,grep("H_", colnames(df))]))
+res2=cbind(res2, log2FC_expression=log2(.1+res2$mean_H_RNAseq)-log2(res2$mean_C_RNAseq+.1))
+res2=cbind(res2, C=ifelse(log2(res2$mean_C_RNAseq+.1)>5, 1, -1), H=ifelse(log2(.1+res2$mean_H_RNAseq)>5, 1, -1))
+res2=cbind(res2, HCmean=rowMeans(df[cn,grep("[CH]_", colnames(df))]))
 
 h1=hist(log2(res2$baseMean[res2$HCmean<5]), breaks=seq(-5,10,.5));
 h2=hist(log2(res2$baseMean[res2$HCmean>=5]), breaks=seq(-5,10,.5));
@@ -121,33 +175,39 @@ d=rbind(h1$count, h2$count)
 colnames(d)=h1$mid
 rownames(d)=c('low-expression', 'high-expression')
 
-pdf("../result/2014Jan16/expression.vs.h3k4me3.pdf", width=7, height=4)
-hist(log2(res2$mean_H), breaks=50, main='Distribution of RNAseq expression of HD samples')
-hist(log2(res2$mean_C), breaks=50, main='Distribution of RNAseq expression of control samples')
-hist(res2$HCmean, breaks=50, main='Distribution of RNAseq expression of all samples')
-hist(log2(res2$baseMean), breaks=seq(-5,10,.5), ylab="Count", xlab="H3K4me3 Signal (log2 based)", main="Distribution of H3K4me3 signal")
+pdf("../result/2014Feb6/expression.vs.h3k4me3.pdf", width=7, height=4)
+hist(log2(res2$mean_H_RNAseq), breaks=50, main='Distribution of RNAseq expression of HD samples'); abline(v=5, col="red", lty=2, lwd=2)
+hist(log2(res2$mean_C_RNAseq), breaks=50, main='Distribution of RNAseq expression of control samples'); abline(v=5, col="red", lty=2, lwd=2)
+hist(log2(res2$HCmean), breaks=50, main='Distribution of RNAseq expression of all samples')  # NOTE: 17187 out of 57093 have all zero RNAseq
+abline(v=5, col="red", lty=2, lwd=2)
+hist(log2(res2$mean_H_h3), breaks=seq(-5,10,.5), ylab="Count", xlab="H3K4me3 Signal (log2 based)", main="Distribution of H3K4me3 signal of HD samples")
+abline(v=3.5, col="red", lty=2, lwd=2)
+hist(log2(res2$mean_C_h3), breaks=seq(-5,10,.5), ylab="Count", xlab="H3K4me3 Signal (log2 based)", main="Distribution of H3K4me3 signal of control samples")
+abline(v=3.5, col="red", lty=2, lwd=2)
+hist(log2(res2$baseMean), breaks=seq(-5,10,.5), ylab="Count", xlab="H3K4me3 Signal (log2 based)", main="Distribution of H3K4me3 signal of all samples")
+abline(v=3.5, col="red", lty=2, lwd=2)
 barplot(d, main="Distribution by H3K4me3 and RNAseq signal", cex.name=.7, xlab="H3K4me3 Signal (log2 based)", ylab="Count", col=c("darkblue","red"),legend = rownames(d))
 dev.off()
 
 # DE gene vs. DP h3k4me3
-pdf("../result/2014Jan16/DE.vs.DP.v2.pdf", width=7, height=5)
+pdf("../result/2014Feb6/DE.vs.DP.v2.pdf", width=7, height=5)
 
 plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, ifelse(res2$padj<.01 & abs(res2$log2FoldChange)>1, 21,20))), cex=.5, lwd=.5, col=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "#00000020", '#ff0000'), bg='#00000020')
 abline(h = 0, lwd = 4, col = '#ff000080')
 legend('topleft', "genes with differential H3K4me3 signal (FDR<0.01 and FC>2)", col='red', bg="#00000020", pch=21, bty='n', cex=.7)
 
-plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, ifelse(res2$padj<.01 & abs(res2$log2FoldChange)>1, 21,20))), cex=.5, lwd=.5, col=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "#00000020", '#ff0000'), bg=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "gray", ifelse(res2$mean_H>res2$mean_C, 'green', 'blue')))
+plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, ifelse(res2$padj<.01 & abs(res2$log2FoldChange)>1, 21,20))), cex=.5, lwd=.5, col=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "#00000020", '#ff0000'), bg=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "gray", ifelse(res2$mean_H_RNAseq>res2$mean_C_RNAseq, 'green', 'blue')))
 abline(h = 0, lwd = 4, col = '#ff000080')
 legend('topleft', c("genes with differential H3K4me3 signal (FDR<0.01 and FC>2)", "RNAseq: HD >= Ct", "RNAseq: HD < Ct"), col=rep('red', 3), pt.bg=c("#00000020", 'green', 'blue'), pch=rep(21, 3), bty='n', cex=.7)
 
-plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, 21)), cex=.5, lwd=.5, col=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "#00000020", '#ff0000'), bg=ifelse(res2$mean_H>res2$mean_C, '#00ff0080', '#0000ff80'))
+plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', xlab="mean of normalized counts", ylab="log2 fold change", pch = ifelse(res2$log2FoldChange < -2, 25, ifelse(res2$log2FoldChange > 2, 24, 21)), cex=.5, lwd=.5, col=ifelse(res2$padj>=.01 | abs(res2$log2FoldChange)<=1, "#00000020", '#ff0000'), bg=ifelse(res2$mean_H_RNAseq>res2$mean_C_RNAseq, '#00ff0080', '#0000ff80'))
 abline(h = 0, lwd = 4, col = '#ff000080')
 legend('topleft', c("genes with differential H3K4me3 signal (FDR<0.01 and FC>2)", "RNAseq: HD >= Ct", "RNAseq: HD < Ct"), col=c('red', "#00000020", "#00000020"), pt.bg=c("#00000020", '#00ff0080', '#0000ff80'), pch=rep(21, 3), bty='n', cex=.7)
 
 dev.off()
 
 
-plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', pch = ifelse(res2$log2FoldChange < -2, 6, ifelse(res2$log2FoldChange > 2, 2, 20)), cex=.5, col=ifelse(res2$padj>=.0001, "#00000020", ifelse(res2$mean_H>res2$mean_C, 'green', 'blue')))
+plot(res2$baseMean, pmax(-2, pmin(2, res2$log2FoldChange)), log = 'x', pch = ifelse(res2$log2FoldChange < -2, 6, ifelse(res2$log2FoldChange > 2, 2, 20)), cex=.5, col=ifelse(res2$padj>=.0001, "#00000020", ifelse(res2$mean_H_RNAseq>res2$mean_C_RNAseq, 'green', 'blue')))
 abline(h = 0, lwd = 4, col = '#ff000080')
 legend('topleft', "genes with adjusted p<0.0001", col='red', pch=20, bty='n')
 
