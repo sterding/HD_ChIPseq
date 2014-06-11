@@ -9,8 +9,9 @@
 
 # required files
 annotation=$GENOME/hg19/Annotation/Genes/gencode.v17.annotation.gtf.gz
-enhancers=~/projects/bu_neuro/data/enhancer.superenhancer.hg19.BI_Brain_Mid_Frontal_Lobe.bed
-#grep -v track ~/projects/PD/superEnhancer/enhancers.superenhancer.hg19.DataS2/BI_Brain_Mid_Frontal_Lobe.bed | sort -k5,5n -u | awk '{OFS="\t";print $0,"."}' > ~/projects/HD/data/enhancer.superenhancer.hg19.BI_Brain_Mid_Frontal_Lobe.bed
+enhancers=~/projects/HD/data/enhancer.superenhancer.hg19.BI_Brain_Mid_Frontal_Lobe.bed
+#grep -v track ~/projects/PD/superEnhancer/enhancers.superenhancer.hg19.DataS2/BI_Brain_Mid_Frontal_Lobe.bed | sort -k5,5n -u | awk '{OFS="\t";print $0,"."}' > ~/projects/HD/data/enhancer.superenhancer.hg19.BI_Brain_Mid_Frontal_Lobe.bed 
+
 
 echo "Step 1: calculate reads count of h3k4me3 in the enhancer regions"
 #######################################################################

@@ -1,9 +1,87 @@
 #!/bin/bash
 
+cd /Users/xdong/projects/HD/data/scratch
 # required files
-annotation=$GENOME/hg19/Annotation/Genes/gencode.v17.annotation.gtf.gz
+annotation=../gencode.v17.annotation.gtf.gz
+#zcat $annotation | fgrep -w transcript | sed 's/[";]//g;' | awk '{OFS="\t"; tss=($7=="+")?($4-1):($5-1); if(tss<2000) tss=2000; print $1, tss-2000,tss+2000,$12"___"$10"___"$14"___"$18, 4000, $7}'  > $annotation.promoter_4k_round_TSS.bed
+# bedtools slop -b 18000 -i $annotation.promoter_4k_round_TSS.bed -g hg19.genome > $annotation.promoter_2M_round_TSS.bed
+
 #expression=$HOME/projects/bu_neuro/data/mlhd_DESeq_normalized_counts_all_controls.txt  # V1 (21HD and 54Ct)
-expression=$HOME/projects/bu_neuro/data/mlhd_DESeq_normalized_counts_all_controls_strict.txt  # V2 (21HD and 50Ct, and using strict DEseq criteria)
+#expression=$HOME/projects/bu_neuro/data/mlhd_DESeq_normalized_counts_all_controls_strict.txt  # V2 (21HD and 50Ct, and using strict DEseq criteria)
+
+# input
+peakfile1=h3k4me3_peaks_intersected.Ct.bed  # from merged peaks of samples of same group
+peakfile2=h3k4me3_peaks_intersected.HD.bed
+
+echo "Step 1: classify peaks into common/uniq"
+
+intersectBed -a $peakfile1 -b $peakfile2 -wao | awk '{OFS="\t"; $4=($4==".")?"uniq":"common"; print $1, $2, $3, $4;}' > $peakfile1.commonuniq
+intersectBed -a $peakfile2 -b $peakfile1 -wao | awk '{OFS="\t"; $4=($4==".")?"uniq":"common"; print $1, $2, $3, $4;}' > $peakfile2.commonuniq
+
+for i in *commonuniq; do echo $i; cut -f4 $i | sort | uniq -c; done
+#h3k4me3_peaks_intersected.Ct.bed.commonuniq
+#  27011 common
+#   6133 uniq
+#h3k4me3_peaks_intersected.HD.bed.commonuniq
+#  23367 common
+#   3941 uniq
+
+echo "Step 2: classify peaks into proximal/distal"
+
+for i in *commonuniq; do
+    echo $i; 
+    bedtools intersect -a $i -b $annotation.promoter_4k_round_TSS.bed -wa -u | cut -f1-9,14,18-23 | awk '{OFS="\t"; print $0, "proximal"}' > $i.inpromoter
+    bedtools intersect -a $i -b $annotation.promoter_4k_round_TSS.bed -wa -v | cut -f1-9,14,18-23 | awk '{OFS="\t"; print $0, "distal"}' >> $i.inpromoter
+done
+
+for i in *.commonuniq.inpromoter; do echo $i; cut -f4-5 $i | sort | uniq -c; done
+#h3k4me3_peaks_intersected.Ct.bed.commonuniq.inpromoter
+#   5010 common	distal
+#  22001 common	proximal
+#   2692 uniq	distal
+#   3441 uniq	proximal
+#h3k4me3_peaks_intersected.HD.bed.commonuniq.inpromoter
+#   4411 common	distal
+#  18956 common	proximal
+#   1568 uniq	distal
+#   2373 uniq	proximal
+   
+echo "Step 3: genes with H3k4kem3 peaks in proximal promoter"
+
+# expression of genes with uniq/proximal peaks in each category
+
+fgrep -f <(cat h3k4me3_peaks_intersected.HD.bed.commonuniq.inpromoter | grep uniq | grep proximal | intersectBed -a - -b $annotation.promoter_4k_round_TSS.bed -wao | sed 's/___/ /g' | cut -f2 -d' ' | uniq | sort -u) ../HD_DE_2014_03_04/no_filter/mlhd_DESeq2_diffexp_DESeq2_outlier_trimmed_adjust.txt > h3k4me3_peaks_intersected.HD.bed.uniq.proximal
+
+fgrep -f <(cat h3k4me3_peaks_intersected.Ct.bed.commonuniq.inpromoter | grep uniq | grep proximal | intersectBed -a - -b $annotation.promoter_4k_round_TSS.bed -wao | sed 's/___/ /g' | cut -f2 -d' ' | uniq | sort -u) ../HD_DE_2014_03_04/no_filter/mlhd_DESeq2_diffexp_DESeq2_outlier_trimmed_adjust.txt > h3k4me3_peaks_intersected.Ct.bed.uniq.proximal &
+
+R
+df1=read.table("h3k4me3_peaks_intersected.Ct.bed.uniq.proximal", header=F)
+df2=read.table("h3k4me3_peaks_intersected.HD.bed.uniq.proximal", header=F)
+wilcox.test(df1$V3, df2$V3)
+#
+#	Wilcoxon rank sum test with continuity correction
+#
+#data:  df1$V3 and df2$V3
+#W = 2990672, p-value = 3.108e-05
+summary(df1$V3)
+#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+#-2.18500 -0.31390 -0.06174 -0.02627  0.23000  3.52800 
+summary(df2$V3)
+#     Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+#-1.771000 -0.218200 -0.011970  0.007362  0.214700  2.382000 
+
+## nearest genes with distal/uniq peaks in each category
+
+bedtools slop -b 18000 -i $annotation.promoter_4k_round_TSS.bed -g hg19.genome > $annotation.promoter_2M_round_TSS.bed
+
+# header:
+# chr, start_peak, end_peak, uniq, distal, nearestGene, distance_TSS_to_mid_of_peak
+cat h3k4me3_peaks_intersected.HD.bed.commonuniq.inpromoter | grep uniq | grep distal | intersectBed -a - -b $annotation.promoter_2M_round_TSS.bed -wo | awk '{d=$3+$2-$7-$8; if(d<0) d=-d; $12=int(d/2); OFS="\t"; print}' | sort -k1,1 -k2,2n -k3,3n -k12,12n | groupBy -g 1,2,3 -c 12 -o min -full |  cut -f1-5,9,12 > h3k4me3_peaks_intersected.HD.bed.uniq.distal.nearestGene.tab
+
+cat h3k4me3_peaks_intersected.Ct.bed.commonuniq.inpromoter | grep uniq | grep distal | intersectBed -a - -b $annotation.promoter_2M_round_TSS.bed -wo | awk '{d=$3+$2-$7-$8; if(d<0) d=-d; $12=int(d/2); OFS="\t"; print}' | sort -k1,1 -k2,2n -k3,3n -k12,12n | groupBy -g 1,2,3 -c 12 -o min -full |  cut -f1-5,9,12 > h3k4me3_peaks_intersected.Ct.bed.uniq.distal.nearestGene.tab
+
+
+############# (deprecated) ###########
 
 # input
 differentialPeaks=$1  #MAnorm_result.xls

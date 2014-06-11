@@ -1,37 +1,45 @@
-#################### merge peaks called from individual alignment ###########
+#################### stratedgy 1: merge peaks called from individual alignment ###########
 cd ~/scratch
 
 # Note: the 6 h3k4me3 samples in batch1 have better quality
 # a peak is defined as a region which was called as peak at least 50% samples (e.g. 3 out of 6 for this case)
-multiIntersectBed -i h3k4me3_HD_batch1_*/*peaks.bed | awk '{OFS="\t";if($4>=3)print $1,$2,$3}' | mergeBed -i stdin > h3k4me3_HD_batch1_peaks_intersected.bed
+multiIntersectBed -i h3k4me3_HD_batch1_*/*peaks.bed | awk '{OFS="\t";if($4>=3)print $1,$2,$3}' | mergeBed -i stdin > h3k4me3_peaks_intersected.HD.bed
 
-# same for control (at least 7 out of 15 controls)
-multiIntersectBed -i Schraham_*[!n$]/*peaks.bed | awk '{OFS="\t";if($4>=7)print $1,$2,$3}' | mergeBed -i stdin > h3k4me3_Ct_Schraham_peaks_intersected.bed
-#multiIntersectBed -i Schraham_*[!n$]/*peaks.bed | awk '{OFS="\t";if($4>=3)print $1,$2,$3}' | mergeBed -i stdin > h3k4me3_Ct_Schraham_3peaks_intersected.bed
+# same for control (3 out 6)
+multiIntersectBed -i Schraham_1644/*peaks.bed Schraham_1713/*peaks.bed Schraham_3706R/*peaks.bed Schraham_7244/*peaks.bed Schraham_R30/*peaks.bed Schraham_R7/*peaks.bed | awk '{OFS="\t";if($4>=3)print $1,$2,$3}' | mergeBed -i stdin > h3k4me3_peaks_intersected.CT.bed
 
-
+#################### stratedgy 2: peak calling for merged samples (vs. 2037input) #####
 # merge alignment
 cat Schraham_{R7,3706R,7244,R30,1644}/accepted_hits.bed > h3k4me3_control_M_g43yr.accepted_hits.bed
 ln -s h3k4me3_control_M_g43yr.accepted_hits.bed h3k4me3_Ct_Schraham.accepted_hits.bed # only 5 Male and >43yr samples
 cat h3k4me3_HD_batch1_*/accepted_hits.bed > h3k4me3_HD_batch1.accepted_hits.bed
 
-##### peak calling for merged samples (vs. 2037input) #####
 controlIP=Schraham_2037in/accepted_hits.bed
 macs14 -t h3k4me3_Ct_Schraham.accepted_hits.bed -c $controlIP -f BED -n h3k4me3_Ct_Schraham 2> h3k4me3_Ct_Schraham.macs.log &
 macs14 -t h3k4me3_HD_batch1.accepted_hits.bed -c $controlIP -f BED -n h3k4me3_HD_batch1 2> h3k4me3_HD_batch1.macs.log &
 
-#####  differential binding between samples #####
-# HD vs. Ct
-mkdir ~/scratch/HD_batch1.vs.Ct_Schraham
-cd ~/scratch/HD_batch1.vs.Ct_Schraham
-export MAnorm=$HOME/bin/MAnorm_Linux_R_Package/
-$MAnorm/MAnorm2.sh ../h3k4me3_HD_batch1_peaks_intersected.bed ../h3k4me3_Ct_Schraham_peaks_intersected.bed ../h3k4me3_HD_batch1.accepted_hits.bed ../h3k4me3_control_M_g43yr.accepted_hits.bed 140 140 &
+#####  calling differential binding between samples using MAnorm #####
+# HD vs. Ct  eaks_intersected.bed ../h3k4me3_Ct_Schraham_peaks_intersected.bed ../h3k4me3_HD_batch1.accepted_hits.bed ../h3k4me3_control_M_g43yr.accepted_hits.bed 140 140 &
 
 $HOME/projects/bu_neuro/src/peakAnalysis2.sh MAnorm_result.xls
 mkdir pdf
 Rscript $HOME/projects/bu_neuro/src/peakAnalysis2.R $MAnorm_result.inpromoter.tab
 Rscript $HOME/projects/bu_neuro/src/geneAnalysis2.R
 mv *.pdf pdf
+
+#################### normalized bigwig and merge samples ###########
+for i in Schraham_* h3k4me3_HD_batch1_*; do
+    #n=`wc -l $i/accepted_hits.bed| cut -f1 -d' '`
+    #awk -vn=$n 'BEGIN{OFS="\t"; print "#total_reads="n;}{$4=$4*1e6/n; print}' $i/accepted_hits.bedGraph > $i/accepted_hits.normalized.bedGraph
+    #bedGraphToBigWig $i/accepted_hits.normalized.bedGraph hg19.chrom.sizes $i/accepted_hits.normalized.bw
+    ln -sf $i/accepted_hits.normalized.bw $i.accepted_hits.normalized.bw
+done
+scp *.accepted_hits.normalized.bw dongx@zlab.umassmed.edu:/home/dongx/public_html/tracks/HD/h3k4me3/merged
+
+unionBedGraphs -i `ls Schraham_*/*normalized.bedGraph` | awk 'function trimmedMean(v, p) {c=asort(v,j); a=int(c*p); s=0; for(i=a+1;i<=(c-a);i++) s+=j[i];return s/(c-2*a);} {OFS="\t"; n=1; for(i=4;i<=NF;i++) S[n++]=$i; print $1,$2,$3, trimmedMean(S, 0.1)}' > trimmedmean.normalized.Ct.bedGraph && bedGraphToBigWig trimmedmean.normalized.Ct.bedGraph hg19.chrom.sizes trimmedmean.normalized.Ct.bw
+
+unionBedGraphs -i `ls h3k4me3_HD_batch1_*/*normalized.bedGraph` | awk 'function trimmedMean(v, p) {c=asort(v,j); a=int(c*p); s=0; for(i=a+1;i<=(c-a);i++) s+=j[i];return s/(c-2*a);} {OFS="\t"; n=1; for(i=4;i<=NF;i++) S[n++]=$i; print $1,$2,$3, trimmedMean(S, 0.1)}' > trimmedmean.normalized.HD.bedGraph && bedGraphToBigWig trimmedmean.normalized.HD.bedGraph hg19.chrom.sizes trimmedmean.normalized.HD.bw
+
 
 
 #################### peak calling for merged alignment (deprecated) ###########

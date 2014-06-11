@@ -21,10 +21,14 @@ and it shows that the 2nd stratedgy is more robust. (see figure: https://docs.go
 Output of 2) method:
 Table 2: https://docs.google.com/presentation/d/1kesRVX4McijTVSfk2ul6c_HrSe88pNuEaVzeRq8B8Dc/edit#slide=id.g12433e2fc_049
 
+$ wc -l *bed
+28579 h3k4me3_peaks_intersected.HD.bed
+33144 h3k4me3_peaks_intersected_Ct.bed
+  
 # 3. significant H3k4me3 peaks in HD and healthy controls, dividing into 2x2 categroies (uniq/common and proximal/distal)
 peakAnalysis.sh
 
-Output: a list of differental/uniq peaks and 2-3 cases study
+Output: a list of differental/uniq peaks and their nearest genes, 2-3 cases study
 
 # 4. genes with differential H3k4me3 in proximal promoter regions
 DP_ChIPseq.sh
