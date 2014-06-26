@@ -1,3 +1,13 @@
+peaks=read.table("~/projects/HD/data/scratch/h3k4me3_peaks_union.signal.neighborhood.annotated.bed.xls", header=T)
+
+attach(peaks)
+# distance of peak to TSS
+hist(pmax(pmin(distance_peakcenter2TSS, 1e4), -1e4), breaks=100)
+hist(distance_peakcenter2TSS[distance_peakcenter2TSS < 2e3 & distance_peakcenter2TSS > -2e3], breaks=100, main=)
+abline(v=c(-1000,1000), col='red', lty=2)
+
+
+#################################################### (OLD VERSION) #############################################
 peaks=read.table("significantPeaks.bed.inpromoter.tab", header=T)
 #colnames(peaks)=c('chr',"start_peak", "end_peak", "length", "summit_pos", "tags_in_peak","pvalue_MACS","fold_enrichment", "FDR","summit_height","peak_type", "raw_read_1", "raw_read_2", "M","A", "pvalue_MAnorm","inpromoter")
 

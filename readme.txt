@@ -14,7 +14,7 @@ peakCalling.sh
 
 Two stratedgies including:
 1) merge alignment and then call peaks from the merged alignment
-2) merge peaks called from individual alignment. Only a peak occurred in >=3 samples will be defined as a peak.
+2) merge peaks called from individual alignment. Only a peak occurred in >=3 samples in each category will be defined as a peak. 
 
 and it shows that the 2nd stratedgy is more robust. (see figure: https://docs.google.com/presentation/d/1kesRVX4McijTVSfk2ul6c_HrSe88pNuEaVzeRq8B8Dc/edit#slide=id.g12433e2fc_05)
 
@@ -24,6 +24,14 @@ Table 2: https://docs.google.com/presentation/d/1kesRVX4McijTVSfk2ul6c_HrSe88pNu
 $ wc -l *bed
 28579 h3k4me3_peaks_intersected.HD.bed
 33144 h3k4me3_peaks_intersected_Ct.bed
+
+# 3. revised method:
+peakAnalysis.sh
+
+1) take union of peaks from HD and control and merge them into one big set of peaks;
+2) for each peak in the set, measure its distance from middle point to the nearest TSS in Gencode annotation (v17), normalized RPM signal in HD and control, # of samples supported that peak. For peak with distance less or equal to 500bp from TSS, it's annotated as a proximal peak; otherwise, distal one. 
+
+output file: h3k4me3_peaks_union.signal.neighborhood.annotated.xls (N=28608)
   
 # 3. significant H3k4me3 peaks in HD and healthy controls, dividing into 2x2 categroies (uniq/common and proximal/distal)
 peakAnalysis.sh
