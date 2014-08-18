@@ -6,7 +6,12 @@ cd ~/scratch
 multiIntersectBed -i h3k4me3_HD_batch1_*/*peaks.bed | awk '{OFS="\t";if($4>=3)print $1,$2,$3,".",$4}' | mergeBed -scores max > h3k4me3_peaks_intersected.HD.bed
 
 # same for control (3 out 6)
-multiIntersectBed -i Schraham_1644/*peaks.bed Schraham_1713/*peaks.bed Schraham_3706R/*peaks.bed Schraham_7244/*peaks.bed Schraham_R30/*peaks.bed Schraham_R7/*peaks.bed | awk '{OFS="\t";if($4>=3)print $1,$2,$3,".",$4}' | mergeBed -scores max > h3k4me3_peaks_intersected.CT.bed
+multiIntersectBed -i Schraham_1644/*peaks.bed Schraham_1713/*peaks.bed Schraham_3706R/*peaks.bed Schraham_7244/*peaks.bed Schraham_R30/*peaks.bed Schraham_R7/*peaks.bed | awk '{OFS="\t";if($4>=3)print $1,$2,$3,".",$4}' | mergeBed -scores max > h3k4me3_peaks_intersected.Ct.bed
+
+## also record all union peaks (e.g. peak called in at least one sample)
+multiIntersectBed -i h3k4me3_HD_batch1_*/*peaks.bed | cut -f1-5 > h3k4me3_peaks_intersected.HD.nofilter.bed
+multiIntersectBed -i Schraham_*/*peaks.bed | cut -f1-5  > h3k4me3_peaks_intersected.Ct.nofilter.bed
+
 
 ##################### stratedgy 2: peak calling for merged samples (vs. 2037input) #####
 ## merge alignment

@@ -10,26 +10,35 @@ annotation=../gencode.v17.annotation.gtf.gz
 #expression=$HOME/projects/bu_neuro/data/mlhd_DESeq_normalized_counts_all_controls_strict.txt  # V2 (21HD and 50Ct, and using strict DEseq criteria)
 
 # input
-peakfile1=h3k4me3_peaks_intersected.Ct.bed  # from merged peaks of samples of same group
-peakfile2=h3k4me3_peaks_intersected.HD.bed
+peakfile1=h3k4me3_peaks_intersected.Ct.nofilter.bed 
+peakfile2=h3k4me3_peaks_intersected.HD.nofilter.bed
 
 echo "Step 0: merge peaks into a union set and then quantify their signal"
-cat  $peakfile1 $peakfile2 | sortBed | mergeBed | awk '($3-$2)>100' > h3k4me3_peaks_union.bed
-intersectBed -a h3k4me3_peaks_union.bed -b $peakfile1 -wao | cut -f1-3,7 | sort -k1,1 -k2,2n -k4,4nr | awk '{if(id!=$1$2$3) {print; id=$1$2$3;}}' > h3k4me3_peaks_union.Ct_depth.txt
-intersectBed -a h3k4me3_peaks_union.bed -b $peakfile2 -wao | cut -f1-3,7 | sort -k1,1 -k2,2n -k4,4nr | awk '{if(id!=$1$2$3) {print; id=$1$2$3;}}' > h3k4me3_peaks_union.HD_depth.txt
+cat  $peakfile1 $peakfile2 | awk '$4>=3' |  sortBed | mergeBed | awk '($3-$2)>100' > h3k4me3_peaks_union.bed
+
+intersectBed -a h3k4me3_peaks_union.bed -b h3k4me3_peaks_intersected.Ct.nofilter.bed -wao | sed 's/\./0/g' | groupBy -g 1,2,3 -c 7 -o max > h3k4me3_peaks_union.Ct_depth.txt
+intersectBed -a h3k4me3_peaks_union.bed -b h3k4me3_peaks_intersected.HD.nofilter.bed -wao | sed 's/\./0/g' | groupBy -g 1,2,3 -c 7 -o max > h3k4me3_peaks_union.HD_depth.txt
 
 ../../src/toBinRegionsOnBigwig.sh trimmedmean.normalized.Ct.bw h3k4me3_peaks_union.bed 1 max > h3k4me3_peaks_union.Ct_signal.txt
 ../../src/toBinRegionsOnBigwig.sh trimmedmean.normalized.HD.bw h3k4me3_peaks_union.bed 1 max > h3k4me3_peaks_union.HD_signal.txt
 paste h3k4me3_peaks_union.bed h3k4me3_peaks_union.Ct_signal.txt h3k4me3_peaks_union.HD_signal.txt | sed 's/ /\t/g' | cut -f1-3,5,7 | sortBed > h3k4me3_peaks_union.signal.bed
 
-bedtools intersect -a h3k4me3_peaks_union.bed -b $annotation.promoter_1M_round_TSS.bed -wao | awk '{OFS="\t"; mid=(($6-$5)==2e6)?(($5+$6)/2):(($5==0)?($6-1e6):($5+1e6)); d=($3+$2)/2-mid; if($9=="-") d=-d; d2=d;if(d2<0)d2=-d2;print $0,d,d2;}' | sort -k1,1 -k2,2n -k12,12n | awk '{split($7, a, "___");b=a[2]"___"a[3]"___"a[4]; OFS="\t";if(id!=$1$2$3) {if($4!=".") print $1, $2, $3,b,$11; else print $1,$2,$3,".","."; id=$1$2$3;} }' > h3k4me3_peaks_union.neighborhood.bed
+# update: if peakCenter is upstream of TSS, then the distance is minus; otherwise, plus
+bedtools intersect -a h3k4me3_peaks_union.bed -b $annotation.promoter_1M_round_TSS.bed -wao | awk '{OFS="\t"; tss=(($6-$5)==2e6)?(($5+$6)/2):(($5==0)?($6-1e6):($5+1e6)); d=tss-($3+$2)/2; if($9=="-") d=-d; d2=d;if(d2<0)d2=-d2;print $0,d,d2;}' | sort -k1,1 -k2,2n -k12,12n | awk '{split($7, a, "___");b=a[2]"___"a[3]"___"a[4]; OFS="\t";if(id!=$1$2$3) {if($4!=".") print $1, $2, $3,b,$11; else print $1,$2,$3,".","."; id=$1$2$3;} }' > h3k4me3_peaks_union.neighborhood.bed
 
 paste h3k4me3_peaks_union.signal.bed <(cut -f4 h3k4me3_peaks_union.Ct_depth.txt) <(cut -f4 h3k4me3_peaks_union.HD_depth.txt) <(cut -f4-5 h3k4me3_peaks_union.neighborhood.bed) > h3k4me3_peaks_union.signal.neighborhood.bed
 
 echo -e "chr\tstart_peak\tend_peak\trpm_summit_CT\trpm_summit_HD\tsamples_support_peak_CT\tsamples_support_peak_HD\tnearest_gene\tdistance_peakcenter2TSS\trelative_location" > h3k4me3_peaks_union.signal.neighborhood.annotated.bed.xls
 
-gzcat $annotation | fgrep -w gene | sed 's/[";]//g;' | cut -f1,4,5 | intersectBed -a h3k4me3_peaks_union.signal.neighborhood.bed -b - -wao | cut -f1-10| uniq | awk '{OFS="\t"; $10=($10==".")?"intergenic":"intragenic"; print;}' >> h3k4me3_peaks_union.signal.neighborhood.annotated.xls
+gzcat $annotation | fgrep -w gene | sed 's/[";]//g;' | cut -f1,4,5 | intersectBed -a h3k4me3_peaks_union.signal.neighborhood.bed -b - -wao | cut -f1-10| uniq | awk '{OFS="\t"; $10=($10==".")?"intergenic":"intragenic"; print;}' >> h3k4me3_peaks_union.signal.neighborhood.annotated.bed.xls
 
+cp h3k4me3_peaks_union.signal.neighborhood.annotated.bed.xls ~/Dropbox/huntington_bu/data/
+
+
+# uniq/common vs. distal/proximal
+
+
+######## DEPRECATED #############
 
 echo "Step 1: classify peaks into common/uniq"
 
