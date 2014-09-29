@@ -1,3 +1,18 @@
+# correlation between proximal peak summit and nearest gene expression, for both HD and CT
+geneExpression = "~/projects/HD/data/HD_DE_2014_03_04/mlhd_DESeq2_norm_counts_adjust.txt"
+geneExpression=read.table(geneExpression, header=T)
+geneExpression=cbind(RNAseq.HD.norm=rowMeans(geneExpression[,grep("H_",colnames(geneExpression))]), RNAseq.CT.norm=rowMeans(geneExpression[,grep("C_",colnames(geneExpression))]))
+
+# fgrep -w proximal ~/Dropbox/huntington_bu/data/h3k4me3_peaks_union.signal.neighborhood.annotated.bed.v4.xls | awk '{if($10<0) $10=-$10; print}' | sort -k9,9 -k10,10 | awk '{if(id!=$9) {print; id=$9}}' | cut -f9,12-14 > ~/Dropbox/huntington_bu/data/h3k4me3.proximal.lognorm.per.genes.txt
+peak="~/Dropbox/huntington_bu/data/h3k4me3.proximal.lognorm.per.genes.txt"
+peak=read.table(peak, header=F); rownames(peak)=peak[,1]; colnames(peak)=c("nearest_geneid","type","name","H4K3me3.HD.lognorm","H4K3me3.CT.lognorm","uniqueness")
+
+peak=cbind(peak, geneExpression[peak$nearest_geneid,])
+
+
+
+############ OLD
+
 df=read.table("allgenes.H3k4me3.expression.v1")
 rownames(df)=df[,1]; df=df[,-c(1,8)]; #,8,17:19,)];
 colnames(df)=c("chr", "start_promoter", "end_promoter", "transID", "type","name", "start_peak", "end_peak", "length", "summit_pos", "tags_in_peak","-10log10(pvalue)","fold_enrichment", "FDR(%)", "summit_height", "peak_type", "raw_read_1", "raw_read_2", "M","A", "pvalue_MAnorm", "dis_tss2sumit", "C_0002", "C_0003", "C_0004", "C_0005", "C_0006", "C_0008", "C_0009", "C_0010", "C_0011", "C_0012", "C_0013", "C_0014_HD", "C_0014_PD", "C_0015", "C_0016", "C_0017", "C_0018_HD", "C_0018_PD", "C_0020", "C_0021_HD", "C_0021_PD", "C_0022", "C_0023", "C_0024", "C_0025", "C_0026", "C_0029_HD", "C_0029_PD", "C_0031", "C_0032", "C_0033", "C_0035", "C_0036", "C_0037", "C_0038", "C_0039", "C_0050", "C_0053", "C_0060", "C_0061", "C_0062", "C_0065", "C_0069", "C_0070", "C_0071", "C_0075", "C_0076", "C_0077", "C_0081", "C_0082", "C_0083", "C_0087", "H_0001", "H_0002", "H_0003", "H_0005", "H_0006", "H_0007", "H_0008", "H_0009", "H_0010", "H_0012", "H_0013", "H_0539", "H_0657", "H_0658", "H_0681", "H_0695", "H_0700", "H_0726", "H_0740", "H_0750");

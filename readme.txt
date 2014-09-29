@@ -39,6 +39,7 @@ peakAnalysis.sh
 Output: a list of differental/uniq peaks and their nearest genes, 2-3 cases study
 
 # 4. genes with differential H3k4me3 in proximal promoter regions
+# use reads count in [-500,+500] of TSS to call DESeq2
 DP_ChIPseq.sh
 
 ## 4.1 pathway analysis

@@ -19,9 +19,15 @@ cat  $peakfile1 $peakfile2 | awk '$4>=3' |  sortBed | mergeBed | awk '($3-$2)>10
 intersectBed -a h3k4me3_peaks_union.bed -b h3k4me3_peaks_intersected.Ct.nofilter.bed -wao | sed 's/\./0/g' | groupBy -g 1,2,3 -c 7 -o max > h3k4me3_peaks_union.Ct_depth.txt
 intersectBed -a h3k4me3_peaks_union.bed -b h3k4me3_peaks_intersected.HD.nofilter.bed -wao | sed 's/\./0/g' | groupBy -g 1,2,3 -c 7 -o max > h3k4me3_peaks_union.HD_depth.txt
 
-../../src/toBinRegionsOnBigwig.sh trimmedmean.normalized.Ct.bw h3k4me3_peaks_union.bed 1 max > h3k4me3_peaks_union.Ct_signal.txt
-../../src/toBinRegionsOnBigwig.sh trimmedmean.normalized.HD.bw h3k4me3_peaks_union.bed 1 max > h3k4me3_peaks_union.HD_signal.txt
-paste h3k4me3_peaks_union.bed h3k4me3_peaks_union.Ct_signal.txt h3k4me3_peaks_union.HD_signal.txt | sed 's/ /\t/g' | cut -f1-3,5,7 | sortBed > h3k4me3_peaks_union.signal.bed
+## there is a BUG in bigwigsummary!!
+#../../src/toBinRegionsOnBigwig.sh trimmedmean.normalized.Ct.bw h3k4me3_peaks_union.bed 1 max > h3k4me3_peaks_union.Ct_signal.txt
+#../../src/toBinRegionsOnBigwig.sh trimmedmean.normalized.HD.bw h3k4me3_peaks_union.bed 1 max > h3k4me3_peaks_union.HD_signal.txt
+#paste h3k4me3_peaks_union.bed h3k4me3_peaks_union.Ct_signal.txt h3k4me3_peaks_union.HD_signal.txt | sed 's/ /\t/g' | cut -f1-3,5,7 | sortBed > h3k4me3_peaks_union.signal.bed
+
+# change to use intersectBed + groupBy
+intersectBed -a h3k4me3_peaks_union.bed -b trimmedmean.normalized.Ct.bedGraph -wao -sorted | sed 's/\t\.\t/\t0\t/g' | groupBy -g 1,2,3 -c 7 -o max > h3k4me3_peaks_union.Ct_signal.txt
+intersectBed -a h3k4me3_peaks_union.bed -b trimmedmean.normalized.HD.bedGraph -wao -sorted | sed 's/\t\.\t/\t0\t/g' | groupBy -g 1,2,3 -c 7 -o max > h3k4me3_peaks_union.HD_signal.txt
+paste h3k4me3_peaks_union.Ct_signal.txt h3k4me3_peaks_union.HD_signal.txt | sed 's/ /\t/g' | cut -f1-4,8 | sortBed | awk '{OFS="\t"; $4=$4+0; $5=$5+0;print}'> h3k4me3_peaks_union.signal.bed
 
 # update: if peakCenter is upstream of TSS, then the distance is minus; otherwise, plus
 bedtools intersect -a h3k4me3_peaks_union.bed -b $annotation.promoter_1M_round_TSS.bed -wao | awk '{OFS="\t"; tss=(($6-$5)==2e6)?(($5+$6)/2):(($5==0)?($6-1e6):($5+1e6)); d=tss-($3+$2)/2; if($9=="-") d=-d; d2=d;if(d2<0)d2=-d2;print $0,d,d2;}' | sort -k1,1 -k2,2n -k12,12n | awk '{split($7, a, "___");b=a[2]"___"a[3]"___"a[4]; OFS="\t";if(id!=$1$2$3) {if($4!=".") print $1, $2, $3,b,$11; else print $1,$2,$3,".","."; id=$1$2$3;} }' > h3k4me3_peaks_union.neighborhood.bed
@@ -35,7 +41,61 @@ gzcat $annotation | fgrep -w gene | sed 's/[";]//g;' | cut -f1,4,5 | intersectBe
 cp h3k4me3_peaks_union.signal.neighborhood.annotated.bed.xls ~/Dropbox/huntington_bu/data/
 
 
-# uniq/common vs. distal/proximal
+#############################################################
+# how much RNA-defined eRNA overlap with other enhancers --> venn diagram
+#############################################################
+grep -w distal ~/Dropbox/huntington_bu/data/h3k4me3_peaks_union.signal.neighborhood.annotated.bed.xls | awk '{OFS="\t"; print $2,$3,$4,$1}' > distalPeaks.bed
+
+# Roadmap Epigenomics enhancers for Brain Dorsolateral Prefrontal Cortex (https://sites.google.com/site/anshulkundaje/projects/epigenomeroadmap)
+curl -s http://www.broadinstitute.org/~anshul/projects/roadmap/segmentations/models/coreMarks/parallel/set2/final/E073_15_coreMarks_segments.bed | awk '$4~/E6|E7|E12/' | intersectBed -a distalPeaks.bed -b stdin -c | sort -k4,4 > distalPeaks.overlap.txt
+
+## super enhancer in brain
+intersectBed -a distalPeaks.bed -b ../enhancer.superenhancer.hg19.BI_Brain_Mid_Frontal_Lobe.bed -c | sort -k4,4 | cut -f5 | paste distalPeaks.overlap.txt - > tmp.list
+mv tmp.list distalPeaks.overlap.txt
+
+# CAGE-defined enhancers
+curl -s http://enhancer.binf.ku.dk/presets/permissive_enhancers.bed | fgrep -v track | intersectBed -a distalPeaks.bed -b stdin -c | sort -k4,4 | cut -f5 | paste distalPeaks.overlap.txt - > tmp.list
+mv tmp.list distalPeaks.overlap.txt
+
+# CAGE-defined enhancer expressed in 
+enhancers_CAGE=~/projects/HD/data/hg19_permissive_enhancers_expression_rle_tpm.brain.tab  # in total, 43011 enhancers defined by CAGE
+# wget http://enhancer.binf.ku.dk/presets/hg19_permissive_enhancers_expression_rle_tpm.csv.gz
+# rowsToCols hg19_permissive_enhancers_expression_rle_tpm.csv -fs=, stdout | grep -E "chr1:858256-858648|CNhs10617|CNhs10647" | rowsToCols -tab stdin stdout | sed 's/"//g' | awk '{OFS="\t"; print $3, $1,$2;}' | sed 's/[:-]/ \t/g' | grep chr > hg19_permissive_enhancers_expression_rle_tpm.brain.tab
+# add header "#chr	start	end	TPM_frontallobeadult_CNhs10647	TPM_brainadult_CNhs10617"
+awk '{OFS="\t"; if($4>0) print $1,$2,$3,$1"_"$2"_"$3"_"$4;}' $enhancers_CAGE | intersectBed -a distalPeaks.bed -b stdin -c | sort -k4,4 | cut -f5 | paste distalPeaks.overlap.txt - > tmp.list
+mv tmp.list distalPeaks.overlap.txt
+
+## DNase cluster
+#intersectBed -a distalPeaks.bed -b ../DNase/DNase.distal.bed -c | sort -k4,4 | cut -f5 | paste distalPeaks.overlap.txt - > tmp.list
+#mv tmp.list distalPeaks.overlap.txt
+#
+## TFBS
+#intersectBed -a distalPeaks.bed -b ../TFBS/TFBS.distal.bed -c | sort -k4,4 | cut -f5 | paste distalPeaks.overlap.txt - > tmp.list
+#mv tmp.list distalPeaks.overlap.txt
+#
+## Conservation
+#intersectBed -a distalPeaks.bed -b ../Conservation/Conservation.distal.bed -c | sort -k4,4 | cut -f5 | paste distalPeaks.overlap.txt - > tmp.list
+#mv tmp.list distalPeaks.overlap.txt
+
+## overlap %
+cat distalPeaks.overlap.txt | datamash mean 5 mean 6 mean 7 mean 8 
+#0.21051382461137	0.15343538625845	0.17408330366679	0.12175151299395
+
+# fisher exact test to see the signifiance
+# generate a random background region with the same length distribution
+../../src/toGenerateRandomRegions.sh distalPeaks.bed | awk '{OFS="\t"; print $1, $2,$3,$1"_"$2"_"$3}'> randomPeaks.bed
+
+curl -s http://www.broadinstitute.org/~anshul/projects/roadmap/segmentations/models/coreMarks/parallel/set2/final/E073_15_coreMarks_segments.bed | awk '$4~/E6|E7|E12/' | intersectBed -a randomPeaks.bed -b stdin -c | sort -k4,4 > randomPeaks.overlap.txt
+intersectBed -a randomPeaks.bed -b ../enhancer.superenhancer.hg19.BI_Brain_Mid_Frontal_Lobe.bed -c | sort -k4,4 | cut -f5 | paste randomPeaks.overlap.txt - > tmp.list
+mv tmp.list randomPeaks.overlap.txt
+curl -s http://enhancer.binf.ku.dk/presets/permissive_enhancers.bed | fgrep -v track | intersectBed -a randomPeaks.bed -b stdin -c | sort -k4,4 | cut -f5 | paste randomPeaks.overlap.txt - > tmp.list
+mv tmp.list randomPeaks.overlap.txt
+awk '{OFS="\t"; if($4>0) print $1,$2,$3,$1"_"$2"_"$3"_"$4;}' $enhancers_CAGE | intersectBed -a randomPeaks.bed -b stdin -c | sort -k4,4 | cut -f5 | paste randomPeaks.overlap.txt - > tmp.list
+mv tmp.list randomPeaks.overlap.txt
+cat randomPeaks.overlap.txt | datamash mean 5 mean 6 mean 7 mean 8 
+# 0.045923816304735	0.0084252996321348	0.015189272576243	0.0034413195680551
+
+
 
 
 ######## DEPRECATED #############
